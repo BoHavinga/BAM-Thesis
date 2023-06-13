@@ -51,7 +51,7 @@ boxplot(BUYquarterID_out$revenue, yaxt="n")
 
 How many buys each year
 ```{r}
-BUYquarterID_out$new_rev <- floor((BUYquarterID_out$revenue/10000))
+BUYquarterID_out$new_rev <- floor((BUYquarterID_out$revenue/CONFIDENTIAL INFORMATION))
 sum(BUYquarterID_out$buyyear==1)
 sum(BUYquarterID_out$buyyear==2)
 sum(BUYquarterID_out$buyyear==3)
