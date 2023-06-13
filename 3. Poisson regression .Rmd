@@ -1,0 +1,532 @@
+---
+title: "Poisson regression Thesis"
+author: "Bo Havinga"
+date: "5/8/2023"
+output: html_document
+---
+
+Import data
+```{r}
+BUYquarter <- read.csv("/Users/Bo/Documents/Universiteit RSM/Master/Thesis/Data/BUYquarter.csv")
+```
+
+Make subset with the converted customers
+```{r}
+BUYquarterID <- subset(BUYquarter, event == 1)
+```
+
+Add which year they buy
+```{r}
+BUYquarterID$buyquarter <- BUYquarterID$Start_Date + BUYquarterID$tstop #This is an extra variable that needs to be included in the model
+BUYquarterID$buyquarter <- as.factor(BUYquarterID$buyquarter)
+
+BUYquarterID$buyyear <- BUYquarterID$buyquarter 
+year_buy <- c(`1` = 1, `2` = 1, `3` = 1,
+              `4` = 1, `5` = 2, `6` = 2,
+              `7` = 2, `8` = 2, `9` = 3,
+              `10` = 3, `11` = 3)
+library(plyr)
+BUYquarterID$buyyear <- mapvalues(BUYquarterID$buyyear, from = names(year_buy), to = year_buy)
+
+season <- c(`1` = 1, `2` = 2, `3` = 3,
+              `4` = 4, `5` = 1, `6` = 2,
+              `7` = 3, `8` = 4, `9` = 1,
+              `10` = 2, `11` = 3)
+BUYquarterID$season <- BUYquarterID$buyquarter
+BUYquarterID$season <- mapvalues(BUYquarterID$buyquarter, from = names(season), to = season)
+```
+
+Remove outliers for dependent variable
+```{r}
+boxplot(BUYquarterID$revenue, yaxt="n")
+Q1 <- quantile(BUYquarterID$revenue, .25)
+Q3 <- quantile(BUYquarterID$revenue, .75)
+IQR <- IQR(BUYquarterID$revenue)
+
+BUYquarterID_out <- subset(BUYquarterID, BUYquarterID$revenue > (Q1 - 1.5*IQR) & BUYquarterID$revenue < (Q3 + 1.5*IQR))
+dim(BUYquarterID_out)
+
+boxplot(BUYquarterID_out$revenue, yaxt="n")
+```
+
+How many buys each year
+```{r}
+BUYquarterID_out$new_rev <- floor((BUYquarterID_out$revenue/10000))
+sum(BUYquarterID_out$buyyear==1)
+sum(BUYquarterID_out$buyyear==2)
+sum(BUYquarterID_out$buyyear==3)
+
+library(ggplot2)
+
+ggplot(BUYquarterID_out, aes(x = new_rev)) +
+  geom_bar(fill = "dark blue") +
+  xlab("Dependent Variable: revenue_class") +
+  ylab("Count for Each Revenue Class") +
+  theme(panel.background = element_rect(fill = "white"),
+        panel.grid.major = element_line(color = "grey80")) +
+  scale_x_continuous(breaks = unique(BUYquarterID_out$new_rev))
+
+
+#Quickly add four rows to better interpreted
+new_rows <- data.frame(matrix(0, nrow = 4, ncol = 52))
+names(new_rows) <- names(BUYquarterID_out)
+# set the values of buyyear and season to 1 for each row
+new_rows$buyyear <- 1
+new_rows$season <- 1
+
+new_data <- rbind(BUYquarterID_out, new_rows)
+
+
+# Year
+ggplot(new_data, aes(x = buyyear)) +
+  geom_bar(fill = "dark blue") +
+  xlab("Buying Year") +
+  ylab("Number of Converted Customers") +
+  theme(panel.background = element_rect(fill = "white"),
+        panel.grid.major = element_line(color = "grey80"))
+```
+
+How many buys each quarter
+```{r}
+library(ggplot2)
+ggplot(new_data, aes(x = buyquarter)) +
+  geom_bar(fill = "dark blue") +
+  xlab("New Dependent Variable of Revenue: new_rev") +
+  ylab("Number of Converted Customers") +
+  theme(panel.background = element_rect(fill = "white"),
+        panel.grid.major = element_line(color = "grey80"))
+
+# Show season without 23 because Q4 is missing
+BUYquarterID_2122 <- subset(new_data, buyyear == 1 | buyyear == 2)
+season_order <- factor(BUYquarterID_2122$season, levels = c(1, 2, 3, 4))
+ggplot(BUYquarterID_2122, aes(x = season_order))+
+  geom_bar(fill = "dark blue") +
+  xlab("Quarter of the Year") +
+  ylab("Number of Converted Customers") +
+  theme(panel.background = element_rect(fill = "white"),
+        panel.grid.major = element_line(color = "grey80"))
+
+# Show season with 23
+season_order2 <- factor(new_data$season, levels = c(1, 2, 3, 4))
+ggplot(new_data, aes(x = season_order2))+
+  geom_bar(fill = "dark blue") +
+  xlab("Quarter of the Year") +
+  ylab("Number of Converted Customers") +
+  theme(panel.background = element_rect(fill = "white"),
+        panel.grid.major = element_line(color = "grey80"))
+
+
+
+
+```
+
+
+Make new variable for revenue
+```{r}
+library(ggplot2)
+ggplot(BUYquarterID_out, aes(x = new_rev)) +
+  geom_bar()
+```
+
+Average deal size each year
+```{r}
+mean(BUYquarterID_out[BUYquarterID_out$buyyear == 1, "new_rev"])
+mean(BUYquarterID_out[BUYquarterID_out$buyyear == 2, "new_rev"])
+mean(BUYquarterID_out[BUYquarterID_out$buyyear == 3, "new_rev"])
+mean(BUYquarterID_out$new_rev)
+```
+
+Make variables standadized
+```{r}
+BUYquarterID_out$Employees_s <- scale(BUYquarterID_out$Employees)
+BUYquarterID_out$cross_selling_s <- scale(BUYquarterID_out$cross_selling)
+BUYquarterID_out$apps_MAU_s <- scale(BUYquarterID_out$apps_MAU)
+BUYquarterID_out$Avg.Interactions.per.Contact_s <- scale(BUYquarterID_out$Avg.Interactions.per.Contact)
+BUYquarterID_out$Avg.Interactions.per.Contact_lag_s <- scale(BUYquarterID_out$Avg.Interactions.per.Contact_lag)
+BUYquarterID_out$tstop_s <- scale(BUYquarterID_out$tstop)
+
+BUYquarterID_out$digital_content_s <- scale(BUYquarterID_out$digital_content)
+BUYquarterID_out$events_s <- scale(BUYquarterID_out$events)
+BUYquarterID_out$trails_s <- scale(BUYquarterID_out$trails)
+BUYquarterID_out$freemium_s <- scale(BUYquarterID_out$freemium)
+
+BUYquarterID_out$digital_content_s_lag <- scale(BUYquarterID_out$digital_content_lag)
+BUYquarterID_out$events_s_lag <- scale(BUYquarterID_out$events_lag)
+BUYquarterID_out$trails_s_lag <- scale(BUYquarterID_out$trails_lag)
+BUYquarterID_out$freemium_s_lag <- scale(BUYquarterID_out$freemium_lag)
+```
+
+
+# Check for correlation
+```{r}
+# Make datasets for correlation plot
+BUYquarterID_outcor_s <- BUYquarterID_out[,c(53,55,54,56,59:62,58)]
+BUYquarterID_outcorboth_s <- BUYquarterID_out[,c(53,55,54,56,59,63,60,64,61,65,62,66,58)]
+# Rename columns
+names(BUYquarterID_outcor_s)[1] = "employees"
+names(BUYquarterID_outcor_s)[2] = "avg_apps_built"
+names(BUYquarterID_outcor_s)[3] = "cross_selling"
+names(BUYquarterID_outcor_s)[4] = "avg_interactions_per_employee"
+names(BUYquarterID_outcor_s)[5] = "digital_content_downloads"
+names(BUYquarterID_outcor_s)[6] = "event_attendees"
+names(BUYquarterID_outcor_s)[7] = "requested_trials"
+names(BUYquarterID_outcor_s)[8] = "freemium_users"
+names(BUYquarterID_outcor_s)[9] = "end_time"
+
+names(BUYquarterID_outcorboth_s)[1] = "employees"
+names(BUYquarterID_outcorboth_s)[2] = "avg_apps_built"
+names(BUYquarterID_outcorboth_s)[3] = "cross_selling"
+names(BUYquarterID_outcorboth_s)[4] = "avg_interactions_per_employee"
+names(BUYquarterID_outcorboth_s)[5] = "digital_content_downloads"
+names(BUYquarterID_outcorboth_s)[6] = "digital_content_downloads_lag"
+names(BUYquarterID_outcorboth_s)[7] = "event_attendees"
+names(BUYquarterID_outcorboth_s)[8] = "event_attendees_lag"
+names(BUYquarterID_outcorboth_s)[9] = "requested_trials"
+names(BUYquarterID_outcorboth_s)[10] = "requested_trials_lag"
+names(BUYquarterID_outcorboth_s)[11] = "freemium_users"
+names(BUYquarterID_outcorboth_s)[12] = "freemium_users_lag"
+names(BUYquarterID_outcorboth_s)[13] = "end_time"
+# Make plots
+library(corrplot)
+corrplot(cor(BUYquarterID_outcor_s), type = "lower",  tl.col = "black", tl.srt = 5, tl.cex = 0.7, cl.cex = 0.7, number.cex = 0.7, addCoef.col = "black")
+corrplot(cor(BUYquarterID_outcorboth_s), type = "lower",  tl.col = "black", tl.srt = 5, tl.cex = 0.7, cl.cex = 0.7, number.cex = 0.5, addCoef.col = "black")
+```
+
+Cluster some industries
+```{r}
+BUYquarterID_out$Industry[BUYquarterID_out$ID == 16305375] <- "Financial Services"
+BUYquarterID_out$Industry[BUYquarterID_out$ID == 2668081] <- "Government"
+BUYquarterID_out$Industry[BUYquarterID_out$ID == 1444620] <- "Education"
+```
+
+
+Poisson regressions with average of 50 seeds (training)
+```{r}
+RMSEdf <- data.frame(model1=as.integer(),model2=as.integer(),model3=as.integer(),model4=as.integer(),model5=as.integer(),model6=as.integer(),model7=as.integer()) 
+MAEdf <- data.frame(model1=as.integer(),model2=as.integer(),model3=as.integer(),model4=as.integer(),model5=as.integer(),model6=as.integer(),model7=as.integer()) 
+PseudoR2df <- data.frame(model1=as.integer(),model2=as.integer(),model3=as.integer(),model4=as.integer(),model5=as.integer(),model6=as.integer(),model7=as.integer()) 
+
+# Loop through the set.seed values
+for (seed in 1:50) {
+  set.seed(seed)
+  
+  # Your existing code
+  trainIndex<- BUYquarterID_out$new_rev %>%
+  createDataPartition(p = 0.75, list = FALSE)
+  training <- BUYquarterID_out[trainIndex,]
+  testing <- BUYquarterID_out[-trainIndex,]
+  
+  models <- list(
+    M0 = vglm(new_rev ~ 1, family = pospoisson(), data = training, model = TRUE),
+  M1 = vglm(new_rev ~ segment + country + Industry, family = pospoisson(), data = training, model = TRUE),
+  M2 = vglm(new_rev ~ segment + country + Industry + Employees_s + apps_MAU_s, family = pospoisson(), data = training, model = TRUE),
+  M3 = vglm(new_rev ~ segment + country + Industry + Employees_s + apps_MAU_s + cross_selling_s, family = pospoisson(), data = training, model = TRUE),
+  M4 = vglm(new_rev ~ segment + country + Industry + Employees_s + apps_MAU_s + cross_selling_s + Avg.Interactions.per.Contact_s + digital_content_s + events_s + trails_s + freemium_s, family = pospoisson(), data = training, model = TRUE),
+  M5 = vglm(new_rev ~ segment + country + Industry + Employees_s + apps_MAU_s + cross_selling_s + Avg.Interactions.per.Contact_s + digital_content_s + events_s + trails_s + freemium_s + tstop_s, family = pospoisson(), data = training, model = TRUE),
+  M6 = vglm(new_rev ~ segment + country + Industry + Employees_s + apps_MAU_s + cross_selling_s + Avg.Interactions.per.Contact_s + digital_content_s + events_s + trails_s + freemium_s + Avg.Interactions.per.Contact_lag_s + digital_content_s_lag + events_s_lag + trails_s_lag + tstop_s, family = pospoisson(), data = training, model = TRUE)
+  )
+
+  # Initialize empty vectors to store the metrics for this seed
+  RMSE_seed <- c()
+  MAE_seed <- c()
+  PseudoR2_seed <- c()
+
+  # Loop through the models and calculate the metrics for this seed
+  for (model_name in names(models)) {
+    predictions <- predict(models[[model_name]], newdata = testing, type = "response")
+    RMSE_seed <- c(RMSE_seed, RMSE(predictions, testing$new_rev))
+    MAE_seed <- c(MAE_seed, MAE(predictions, testing$new_rev))
+    pseudo_r2 <- PseudoR2(models[[model_name]], "McFadden")
+    PseudoR2_seed <- c(PseudoR2_seed, pseudo_r2)
+  }
+  
+  new_rowRMSE <- data.frame(model1 = RMSE_seed[1],
+                            model2 = RMSE_seed[2],
+                            model3 = RMSE_seed[3],
+                            model4 = RMSE_seed[4],
+                            model5 = RMSE_seed[5],
+                            model6 = RMSE_seed[6],
+                            model7 = RMSE_seed[7])
+  RMSEdf <- rbind(RMSEdf, new_rowRMSE)
+  
+  new_rowMAE <- data.frame(model1 = MAE_seed[1],
+                           model2 = MAE_seed[2],
+                           model3 = MAE_seed[3],
+                           model4 = MAE_seed[4],
+                           model5 = MAE_seed[5],
+                           model6 = MAE_seed[6],
+                           model7 = MAE_seed[7])
+  MAEdf <- rbind(MAEdf, new_rowMAE)
+  
+  new_rowPseudoR2 <- data.frame(model1 = PseudoR2_seed[1],
+                               model2 = PseudoR2_seed[2],
+                               model3 = PseudoR2_seed[3],
+                               model4 = PseudoR2_seed[4],
+                               model5 = PseudoR2_seed[5],
+                               model6 = PseudoR2_seed[6],
+                               model7 = PseudoR2_seed[7])
+  PseudoR2df <- rbind(PseudoR2df, new_rowPseudoR2)
+
+}
+
+# Create the dataframe
+poissonfinal <- data.frame(Model = 1:7,
+                           RMSE = c(mean(RMSEdf$model1), mean(RMSEdf$model2), mean(RMSEdf$model3),
+                                    mean(RMSEdf$model4), mean(RMSEdf$model5), mean(RMSEdf$model6),
+                                    mean(RMSEdf$model7)),
+                           MAE = c(mean(MAEdf$model1), mean(MAEdf$model2), mean(MAEdf$model3),
+                                    mean(MAEdf$model4), mean(MAEdf$model5), mean(MAEdf$model6),
+                                    mean(MAEdf$model7)),
+                           PseudoR2 = c(mean(PseudoR2df$model1), mean(PseudoR2df$model2), mean(PseudoR2df$model3),
+                                        mean(PseudoR2df$model4), mean(PseudoR2df$model5), mean(PseudoR2df$model6),
+                                        mean(PseudoR2df$model7)))
+
+poissonfinal_xtab <- xtable(poissonfinal)
+print(poissonfinal_xtab)
+print(poissonfinal)
+
+```
+
+
+
+# T-test
+```{r}
+# Pairwise t-tests for RMSE
+ttest_RMSE <- list()
+pvalue_RMSE <- list()
+for (i in 1:6) {
+  ttest_RMSE[[i]] <- t.test(RMSEdf[[paste0("model", i)]], RMSEdf[[paste0("model", i + 1)]])
+  pvalue_RMSE[[i]] <- ttest_RMSE[[i]]$p.value
+}
+
+# Pairwise t-tests for MAE
+ttest_MAE <- list()
+pvalue_MAE <- list()
+for (i in 1:6) {
+  ttest_MAE[[i]] <- t.test(MAEdf[[paste0("model", i)]], MAEdf[[paste0("model", i + 1)]])
+  pvalue_MAE[[i]] <- ttest_MAE[[i]]$p.value
+}
+
+# Pairwise t-tests for R-squared
+ttest_R2 <- list()
+pvalue_R2 <- list()
+for (i in 2:6) {
+  ttest_R2[[i]] <- t.test(PseudoR2df[[paste0("model", i)]], PseudoR2df[[paste0("model", i + 1)]])
+  pvalue_R2[[i]] <- ttest_R2[[i]]$p.value
+}
+t.test(AICdf[["model6"]], AICdf[["model7"]])$p.value
+
+# Pairwise t-tests for AIC
+ttest_AIC <- list()
+pvalue_AIC <- list()
+for (i in 1:6) {
+  ttest_AIC[[i]] <- t.test(AICdf[[paste0("model", i)]], AICdf[[paste0("model", i + 1)]])
+  pvalue_AIC[[i]] <- ttest_AIC[[i]]$p.value
+}
+
+# Pairwise t-tests for BIC
+ttest_BIC <- list()
+pvalue_BIC <- list()
+for (i in 1:6) {
+  ttest_BIC[[i]] <- t.test(BICdf[[paste0("model", i)]], BICdf[[paste0("model", i + 1)]])
+  pvalue_BIC[[i]] <- ttest_BIC[[i]]$p.value
+}
+
+t.test(BICdf[[paste0("model", 3)]], BICdf[[paste0("model", 3 + 1)]])
+# Create a dataframe with models as rows
+model_names <- c("model1-model2", "model2-model3", "model3-model4", "model4-model5", "model5-model6", "model6-model7")
+
+# Initialize an empty dataframe
+comparison_df <- data.frame(Model = model_names, RMSE = NA, MAE = NA, PseudoR2 = NA) #, AIC = NA, BIC = NA
+
+# Assign the metrics to the dataframe
+comparison_df$RMSE[1:6] <- sapply(1:6, function(i) pvalue_RMSE[[i]])
+comparison_df$MAE[1:6] <- sapply(1:6, function(i) pvalue_MAE[[i]])
+comparison_df$PseudoR2[2:6] <- sapply(2:6, function(i) pvalue_R2[[i]])
+#comparison_df$AIC[1:6] <- sapply(1:6, function(i) pvalue_AIC[[i]])
+#comparison_df$BIC[1:6] <- sapply(1:6, function(i) pvalue_BIC[[i]])
+
+# Print the resulting dataframe
+comparison_df_xtab <- xtable(comparison_df)
+print(comparison_df)
+print(comparison_df_xtab)
+```
+
+
+# Change back
+```{r}
+BUYquarterID_out$Industry[BUYquarterID_out$ID == 16305375] <- "Software, Data & Platforms"
+BUYquarterID_out$Industry[BUYquarterID_out$ID == 2668081] <- "Nonprofit & IGO"
+BUYquarterID_out$Industry[BUYquarterID_out$ID == 1444620] <- "Nonprofit & IGO"
+```
+
+
+# Results best model
+```{r}
+  
+M6 = vglm(new_rev ~ Industry + segment + country  + Employees_s + apps_MAU_s + cross_selling_s + Avg.Interactions.per.Contact_s + digital_content_s + events_s + trails_s + freemium_s + Avg.Interactions.per.Contact_lag_s + digital_content_s_lag + events_s_lag + trails_s_lag + tstop_s, family = pospoisson(), data = BUYquarterID_out)
+summary(M6)
+```
+
+
+# Check for unobserved heterogeneity
+```{r}
+residuals <- residuals(M6, type = "pearson")
+dispersion <- sum(residuals^2) / df.residual(M6)
+test_statistic <- sum(residuals^2) / dispersion
+1 - pchisq(test_statistic, df = df.residual(M6))
+```
+
+
+
+
+
+##### CHECK WITH OUTLIERS #######
+
+# Without outliers included
+```{r}
+BUYquarterID$new_rev <- floor((BUYquarterID$revenue/10000))
+
+BUYquarterID$Employees_s <- scale(BUYquarterID$Employees)
+BUYquarterID$cross_selling_s <- scale(BUYquarterID$cross_selling)
+BUYquarterID$apps_MAU_s <- scale(BUYquarterID$apps_MAU)
+BUYquarterID$Avg.Interactions.per.Contact_s <- scale(BUYquarterID$Avg.Interactions.per.Contact)
+BUYquarterID$Avg.Interactions.per.Contact_lag_s <- scale(BUYquarterID$Avg.Interactions.per.Contact_lag)
+BUYquarterID$tstop_s <- scale(BUYquarterID$tstop)
+
+BUYquarterID$digital_content_s <- scale(BUYquarterID$digital_content)
+BUYquarterID$events_s <- scale(BUYquarterID$events)
+BUYquarterID$trails_s <- scale(BUYquarterID$trails)
+BUYquarterID$freemium_s <- scale(BUYquarterID$freemium)
+
+BUYquarterID$digital_content_s_lag <- scale(BUYquarterID$digital_content_lag)
+BUYquarterID$events_s_lag <- scale(BUYquarterID$events_lag)
+BUYquarterID$trails_s_lag <- scale(BUYquarterID$trails_lag)
+BUYquarterID$freemium_s_lag <- scale(BUYquarterID$freemium_lag)
+```
+
+# Check for correlation
+```{r}
+# Make datasets for correlation plot
+BUYquarterID_outcor_s <- BUYquarterID_out[,c(53:56,59:62,58)]
+BUYquarterID_outcorboth_s <- BUYquarterID_out[,c(53:56,59,63,60,64,61,65,62,66,58)]
+# Make plots
+library(corrplot)
+corrplot(cor(BUYquarterID_outcor_s), type = "lower",  tl.col = "black", tl.srt = 35, tl.cex = 0.7, cl.cex = 0.7, number.cex = 0.7, addCoef.col = "black")
+corrplot(cor(BUYquarterID_outcorboth_s), type = "lower",  tl.col = "black", tl.srt = 35, tl.cex = 0.7, cl.cex = 0.7, number.cex = 0.5, addCoef.col = "black", title = "\n\n Correlation Plot Of Poisson Data")
+```
+
+Merge categories for industry
+```{r}
+# Find the rows with the specified IDs
+rows_to_change <- BUYquarterID$ID %in% c(1877638, 16305375)
+
+# Change the Industry values for the specified rows
+BUYquarterID$Industry[rows_to_change] <- c("Government", "Financial Services")
+```
+
+Poisson regressions with average of 50 seeds
+```{r}
+AICdf <- data.frame(model1=as.integer(),model2=as.integer(),model3=as.integer(),model4=as.integer(),model5=as.integer(),model6=as.integer(),model7=as.integer()) 
+BICdf <- data.frame(model1=as.integer(),model2=as.integer(),model3=as.integer(),model4=as.integer(),model5=as.integer(),model6=as.integer(),model7=as.integer()) 
+RMSEdf <- data.frame(model1=as.integer(),model2=as.integer(),model3=as.integer(),model4=as.integer(),model5=as.integer(),model6=as.integer(),model7=as.integer()) 
+MAEdf <- data.frame(model1=as.integer(),model2=as.integer(),model3=as.integer(),model4=as.integer(),model5=as.integer(),model6=as.integer(),model7=as.integer()) 
+PseudoR2df <- data.frame(model1=as.integer(),model2=as.integer(),model3=as.integer(),model4=as.integer(),model5=as.integer(),model6=as.integer(),model7=as.integer()) 
+R2df <- data.frame(model1=as.integer(),model2=as.integer(),model3=as.integer(),model4=as.integer(),model5=as.integer(),model6=as.integer(),model7=as.integer()) 
+
+
+# Loop through the set.seed values
+for (seed in 1:50) {
+  set.seed(seed)
+  
+  # Your existing code
+  trainIndex<- BUYquarterID$new_rev %>%
+  createDataPartition(p = 0.75, list = FALSE)
+  training <- BUYquarterID[trainIndex,]
+  testing <- BUYquarterID[-trainIndex,]
+  
+  models <- list(
+    M0 = vglm(new_rev ~ 1, family = pospoisson(), data = training, model = TRUE),
+  M1 = vglm(new_rev ~ segment + country + Industry, family = pospoisson(), data = training, model = TRUE),
+  M2 = vglm(new_rev ~ segment + country + Industry + Employees_s + apps_MAU_s, family = pospoisson(), data = training, model = TRUE),
+  M3 = vglm(new_rev ~ segment + country + Industry + Employees_s + apps_MAU_s + cross_selling_s, family = pospoisson(), data = training, model = TRUE),
+  M4 = vglm(new_rev ~ segment + country + Industry + Employees_s + apps_MAU_s + cross_selling_s + Avg.Interactions.per.Contact_s + digital_content_s + events_s + trails_s + freemium_s, family = pospoisson(), data = training, model = TRUE),
+  M5 = vglm(new_rev ~ segment + country + Industry + Employees_s + apps_MAU_s + cross_selling_s + Avg.Interactions.per.Contact_s + digital_content_s + events_s + trails_s + freemium_s + tstop_s, family = pospoisson(), data = training, model = TRUE),
+  M6 = vglm(new_rev ~ segment + country + Industry + Employees_s + apps_MAU_s + cross_selling_s + Avg.Interactions.per.Contact_s + digital_content_s + events_s + trails_s + freemium_s + Avg.Interactions.per.Contact_lag_s + digital_content_s_lag + events_s_lag + trails_s_lag + tstop_s, family = pospoisson(), data = training, model = TRUE)
+  )
+
+  # Initialize empty vectors to store the metrics for this seed
+  RMSE_seed <- c()
+  MAE_seed <- c()
+  PseudoR2_seed <- c()
+
+  # Loop through the models and calculate the metrics for this seed
+  for (model_name in names(models)) {
+    predictions <- predict(models[[model_name]], newdata = testing, type = "response")
+    RMSE_seed <- c(RMSE_seed, RMSE(predictions, testing$new_rev))
+    MAE_seed <- c(MAE_seed, MAE(predictions, testing$new_rev))
+    pseudo_r2 <- PseudoR2(models[[model_name]], "McFadden")
+    PseudoR2_seed <- c(PseudoR2_seed, pseudo_r2)
+  }
+  
+  new_rowRMSE <- data.frame(model1 = RMSE_seed[1],
+                            model2 = RMSE_seed[2],
+                            model3 = RMSE_seed[3],
+                            model4 = RMSE_seed[4],
+                            model5 = RMSE_seed[5],
+                            model6 = RMSE_seed[6],
+                            model7 = RMSE_seed[7])
+  RMSEdf <- rbind(RMSEdf, new_rowRMSE)
+  
+  new_rowMAE <- data.frame(model1 = MAE_seed[1],
+                           model2 = MAE_seed[2],
+                           model3 = MAE_seed[3],
+                           model4 = MAE_seed[4],
+                           model5 = MAE_seed[5],
+                           model6 = MAE_seed[6],
+                           model7 = MAE_seed[7])
+  MAEdf <- rbind(MAEdf, new_rowMAE)
+  
+  new_rowPseudoR2 <- data.frame(model1 = PseudoR2_seed[1],
+                               model2 = PseudoR2_seed[2],
+                               model3 = PseudoR2_seed[3],
+                               model4 = PseudoR2_seed[4],
+                               model5 = PseudoR2_seed[5],
+                               model6 = PseudoR2_seed[6],
+                               model7 = PseudoR2_seed[7])
+  PseudoR2df <- rbind(PseudoR2df, new_rowPseudoR2)
+}
+
+# Create the dataframe
+poissonfinal <- data.frame(Model = 1:7,
+                           RMSE = c(mean(RMSEdf$model1), mean(RMSEdf$model2), mean(RMSEdf$model3),
+                                    mean(RMSEdf$model4), mean(RMSEdf$model5), mean(RMSEdf$model6),
+                                    mean(RMSEdf$model7)),
+                           MAE = c(mean(MAEdf$model1), mean(MAEdf$model2), mean(MAEdf$model3),
+                                    mean(MAEdf$model4), mean(MAEdf$model5), mean(MAEdf$model6),
+                                    mean(MAEdf$model7)),
+                           PseudoR2 = c(mean(PseudoR2df$model1), mean(PseudoR2df$model2), mean(PseudoR2df$model3),
+                                        mean(PseudoR2df$model4), mean(PseudoR2df$model5), mean(PseudoR2df$model6),
+                                        mean(PseudoR2df$model7)))
+
+poissonfinal_xtab <- xtable(poissonfinal)
+print(poissonfinal_xtab)
+print(poissonfinal)
+```
+
+
+
+# Results best model (model 6)
+```{r}
+M6 = vglm(new_rev ~ Industry + segment + country +  Employees_s + apps_MAU_s + cross_selling_s + Avg.Interactions.per.Contact_s + digital_content_s + events_s + trails_s + freemium_s + Avg.Interactions.per.Contact_lag_s + digital_content_s_lag + events_s_lag + trails_s_lag + tstop_s, family = pospoisson(), data = BUYquarterID)
+summary(M6)
+```
+
+
+# Check for unobserved heterogeneity
+```{r}
+residuals <- residuals(M6, type = "pearson")
+dispersion <- sum(residuals^2) / df.residual(M6)
+test_statistic <- sum(residuals^2) / dispersion
+1 - pchisq(test_statistic, df = df.residual(M6))
+```

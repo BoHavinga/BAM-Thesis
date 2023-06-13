@@ -1,0 +1,1372 @@
+---
+title: "Prep data Thesis"
+author: "Bo Havinga"
+date: "4/26/2023"
+output: html_document
+---
+
+# Import data
+
+```{r}
+#install.packages("readxl")
+#install.packages("lubridate")
+#install.packages("plyr")
+#install.packages("dplyr")
+
+library(readxl)
+
+# KPI lake
+KPIdata <- excel_sheets("/Users/Bo/Documents/Universiteit RSM/Master/Thesis/Data/KPI_lake_done.xlsx")
+KPI_sheets <- lapply(KPIdata, function(x) read_excel("/Users/Bo/Documents/Universiteit RSM/Master/Thesis/Data/KPI_lake_done.xlsx", sheet = x))
+names(KPI_sheets) <- KPIdata
+
+KPImonth <- KPI_sheets$month
+KPIquarter <- KPI_sheets$quarter
+KPIyear <- KPI_sheets$year
+
+colnames(KPImonth) <- KPImonth[5,]
+KPImonth <- KPImonth[-(1:5),]
+colnames(KPIquarter) <- KPIquarter[5,]
+KPIquarter <- KPIquarter[-(1:5),]
+colnames(KPIyear) <- KPIyear[5,]
+KPIyear <- KPIyear[-(1:5),]
+
+# Start date
+cross_start <- excel_sheets("/Users/Bo/Documents/Universiteit RSM/Master/Thesis/Data/Start+Cross_done.xlsx")
+cross_start_sheets <- lapply(cross_start, function(x) read_excel("/Users/Bo/Documents/Universiteit RSM/Master/Thesis/Data/Start+Cross_done.xlsx", sheet = x))
+names(cross_start_sheets) <- cross_start
+
+StartDate <- cross_start_sheets$Start
+
+StartDate <- StartDate[,-(3:10)]
+names(StartDate)[1] = "TPID"
+names(StartDate)[2] = "Start_Date"
+StartDate <- StartDate[-(1:6),]
+StartDate <- StartDate[!is.na(StartDate$TPID), ]
+
+# Employees
+CAT_employee <- excel_sheets("/Users/Bo/Documents/Universiteit RSM/Master/Thesis/Data/CAT+employees_done.xlsx")
+CAT_employee_sheets <- lapply(CAT_employee, function(x) read_excel("/Users/Bo/Documents/Universiteit RSM/Master/Thesis/Data/CAT+employees_done.xlsx", sheet = x))
+names(CAT_employee_sheets) <- CAT_employee
+
+employees <- CAT_employee_sheets$employees
+
+# Usage 
+usageyear <- CAT_employee_sheets$year
+usagequarter <- CAT_employee_sheets$quarter
+usagemonth21 <- CAT_employee_sheets$month21
+usagemonth22 <- CAT_employee_sheets$month22
+usagemonth23 <- CAT_employee_sheets$month23
+  
+# Cross selling
+crossmonth <- cross_start_sheets$month
+crossquarter <- cross_start_sheets$quarter
+crossyear <- cross_start_sheets$year
+
+colnames(crossmonth) <- crossmonth[5,]
+crossmonth <- crossmonth[-(1:5),]
+crossmonth <- crossmonth[,-(35)]
+crossmonth[,(2:34)] <- apply(crossmonth[,(2:34)], 2, as.numeric)
+crossmonth[is.na(crossmonth)] = 0
+
+colnames(crossquarter) <- crossquarter[5,]
+crossquarter <- crossquarter[-(1:5),]
+crossquarter <- crossquarter[,-(13)]
+crossquarter[,(2:12)] <- apply(crossquarter[,(2:12)], 2, as.numeric)
+crossquarter[is.na(crossquarter)] = 0
+
+colnames(crossyear) <- crossyear[5,]
+crossyear <- crossyear[-(1:5),]
+crossyear <- crossyear[,-(5)]
+crossyear[,(2:4)] <- apply(crossyear[,(2:4)], 2, as.numeric)
+crossyear[is.na(crossyear)] = 0
+
+# MEI
+MEIdata <- excel_sheets("/Users/Bo/Documents/Universiteit RSM/Master/Thesis/Data/MEI_done.xlsx")
+MEI_sheets <- lapply(MEIdata, function(x) read_excel("/Users/Bo/Documents/Universiteit RSM/Master/Thesis/Data/MEI_done.xlsx", sheet = x))
+names(MEI_sheets) <- MEIdata
+
+MEImonth <- MEI_sheets$month
+MEIquarter <- MEI_sheets$quarter
+MEIyear <- MEI_sheets$year
+
+```
+
+# -----------------------------------------
+# -----------------------------------------
+# Monthly data
+# -----------------------------------------
+# -----------------------------------------
+
+Merge KPI with start date
+```{r}
+KPIdatemonth <- merge(KPImonth, StartDate, by = c("TPID", "TPID")) 
+KPIdatemonth <- merge(KPIdatemonth, employees, by = c("TPID", "TPID"))
+KPIdatemonth <- KPIdatemonth[c(1:5, 40:41, 6:39)]
+KPIdatemonth <- KPIdatemonth[,-(41)]
+KPIdatemonth[,(7:40)] <- apply(KPIdatemonth[,(7:40)], 2, as.numeric)
+colnames(KPIdatemonth) <- gsub(" ", "_", colnames(KPIdatemonth))
+```
+
+Make each month a new row
+```{r}
+library(tidyr)
+KPIdatemonth <- KPIdatemonth %>% 
+  pivot_longer(cols = 8:40, names_to = "column", values_to = "value") 
+```
+
+
+Make Tstart and Tstop
+```{r}
+month_map <- c(July_2020 = 1, August_2020 = 2, September_2020 = 3,
+October_2020 = 4, November_2020 = 5, December_2020 = 6,
+January_2021 = 7, February_2021 = 8, March_2021 = 9,
+April_2021 = 10, May_2021 = 11, June_2021 = 12,
+July_2021 = 13, August_2021 = 14, September_2021 = 15,
+October_2021 = 16, November_2021 = 17, December_2021 = 18,
+January_2022 = 19, February_2022 = 20, March_2022 = 21,
+April_2022 = 22, May_2022 = 23, June_2022 = 24,
+July_2022 = 25, August_2022 = 26, September_2022 = 27,
+October_2022 = 28, November_2022 = 29, December_2022 = 30,
+January_2023 = 31, February_2023 = 32, March_2023 = 33)
+
+library(dplyr)
+library(plyr)
+KPIdatemonth$column <- recode(KPIdatemonth$column, !!!month_map)
+
+names(KPIdatemonth)[8] = "tstop"
+KPIdatemonth$tstart <- as.numeric(KPIdatemonth$tstop) - 1
+KPIdatemonth <- KPIdatemonth[c(1:7, 10, 8:9)]
+```
+
+
+Start_Date to numbers
+```{r}
+library(lubridate)
+KPIdatemonth$Start_Date <- mdy(KPIdatemonth$Start_Date)
+KPIdatemonth$Start_Date <- format(as.Date(KPIdatemonth$Start_Date, "%mY-%m-%d"), "%B_%Y")
+
+# Delete the ones before July 2020
+KPIdatemonth <- KPIdatemonth %>%
+filter(!Start_Date %in% c("oktober_2019", "november_2019", "december_2019", "januari_2020", "februari_2020", "maart_2020", "april_2020", "mei_2020", "juni_2020", "april_2023"))
+
+# Make it numeric
+month_map2 <- c(juli_2020 = 0, augustus_2020 = 1, september_2020 = 2,
+oktober_2020 = 3, november_2020 = 4, december_2020 = 5,
+januari_2021 = 6, februari_2021 = 7, maart_2021 = 8,
+april_2021 = 9, mei_2021 = 10, juni_2021 = 11,
+juli_2021 = 12, augustus_2021 = 13, september_2021 = 14,
+oktober_2021 = 15, november_2021 = 16, december_2021 = 17,
+januari_2022 = 18, februari_2022 = 19, maart_2022 = 20,
+april_2022 = 21, mei_2022 = 22, juni_2022 = 23,
+juli_2022 = 24, augustus_2022 = 25, september_2022 = 26,
+oktober_2022 = 27, november_2022 = 28, december_2022 = 29,
+januari_2023 = 30, februari_2023 = 31, maart_2023 = 32)
+
+library(plyr)
+KPIdatemonth$Start_Date <- mapvalues(KPIdatemonth$Start_Date, from = names(month_map2), to = month_map2)
+
+```
+
+Make event variable
+```{r}
+KPIdatemonth$event <- 0
+KPIdatemonth$value <- as.numeric(KPIdatemonth$value)
+KPIdatemonth$value <- ifelse(is.na(KPIdatemonth$value) | KPIdatemonth$value < 0, 0, KPIdatemonth$value)
+
+for (i in 1:nrow(KPIdatemonth)) {
+  current_tpid <- KPIdatemonth$TPID[i]
+  current_value <- KPIdatemonth$value[i]
+  
+  previous_value <- KPIdatemonth$value[1:(i-1)][KPIdatemonth$TPID[1:(i-1)] == current_tpid]
+ 
+  if (current_value >= 10000 & all(previous_value < 10000)) {
+    KPIdatemonth$event[i] <- 1
+  }
+}
+```
+
+Make buy variable
+```{r}
+KPIdatemonth$buy <- 0 
+
+for (i in 1:nrow(KPIdatemonth)) {
+  current_id <- KPIdatemonth$TPID[i]
+  current_event <- KPIdatemonth$event[i]
+
+  if (current_event == 1) {
+    KPIdatemonth$buy[KPIdatemonth$TPID == current_id] <- 1
+  } else if (current_event == 0 & any(KPIdatemonth$buy[KPIdatemonth$TPID == current_id] == 1)) {
+    KPIdatemonth$buy[i] <- 1
+  }
+}
+```
+
+Make time variable
+```{r}
+detach(package:plyr, unload=TRUE)
+library(dplyr)
+
+KPIdatemonth[,(6:12)] <- apply(KPIdatemonth[,(6:12)], 2, as.numeric)
+
+KPIdatemonth <- KPIdatemonth %>%
+  group_by(TPID) %>%
+  mutate(subscr_time = ifelse(Start_Date - tstop < 0, tstop - Start_Date, 0))
+```
+
+
+#-------------------------
+Cross selling prep
+#-------------------------
+
+Make each month a new row
+```{r}
+colnames(crossmonth) <- gsub(" ", "_", colnames(crossmonth))
+
+library(tidyr)
+crossmonth <- crossmonth %>% 
+  pivot_longer(cols = 2:34, names_to = "column", values_to = "value") 
+```
+
+Make tstop
+```{r}
+
+month_map <- c(July_2020 = 1, August_2020 = 2, September_2020 = 3,
+October_2020 = 4, November_2020 = 5, December_2020 = 6,
+January_2021 = 7, February_2021 = 8, March_2021 = 9,
+April_2021 = 10, May_2021 = 11, June_2021 = 12,
+July_2021 = 13, August_2021 = 14, September_2021 = 15,
+October_2021 = 16, November_2021 = 17, December_2021 = 18,
+January_2022 = 19, February_2022 = 20, March_2022 = 21,
+April_2022 = 22, May_2022 = 23, June_2022 = 24,
+July_2022 = 25, August_2022 = 26, September_2022 = 27,
+October_2022 = 28, November_2022 = 29, December_2022 = 30,
+January_2023 = 31, February_2023 = 32, March_2023 = 33)
+
+library(dplyr)
+crossmonth$column <- recode(crossmonth$column, !!!month_map)
+names(crossmonth)[2] = "tstop"
+```
+
+
+Merge cross selling with dataset
+```{r}
+KPIdatemonth <- merge(KPIdatemonth, crossmonth, by = c("TPID", "tstop")) 
+names(KPIdatemonth)[14] = "cross"
+names(KPIdatemonth)[10] = "revenue"
+```
+
+
+#-------------------------
+Marketing data prep
+#-------------------------
+
+Clean data
+```{r}
+MEImonth <- MEImonth[,-(266:273)]
+colnames(MEImonth) <- MEImonth[6, ]
+names <- colnames(MEImonth)
+
+# create a vector of new column names
+new_names <- paste0(names, "_", MEImonth[5, ])
+
+# rename the columns
+colnames(MEImonth) <- new_names
+MEImonth <- MEImonth[-(1:6),]
+names(MEImonth)[1] = "TPID"
+```
+
+Make each month a new row
+```{r}
+library(tidyr)
+MEImonth <- pivot_longer(MEImonth, cols = -TPID, names_to = c(".value", "Variable"), names_sep = "_")
+```
+
+Make all NA as zero
+```{r}
+cols_to_replace <- c(3,4,5,7,8,9,10)
+MEImonth[, cols_to_replace] <- apply(MEImonth[, cols_to_replace], 2, function(x) ifelse(is.na(x), 0, x))
+```
+
+Make tstop
+```{r}
+MEImonth$Variable <- gsub(" ", "_", MEImonth$Variable)
+library(dplyr)
+MEImonth$Variable <- recode(MEImonth$Variable, !!!month_map)
+names(MEImonth)[2] = "tstop"
+```
+
+Merge marketing data with dataset
+```{r}
+KPIdatemonth <- merge(KPIdatemonth, MEImonth, by = c("TPID", "tstop"))
+```
+
+
+#-------------------------
+Usage data prep
+#-------------------------
+
+## 2021
+Clean data
+```{r}
+usagemonth21 <- usagemonth21[,-(86:92)]
+colnames(usagemonth21) <- usagemonth21[2, ]
+names <- colnames(usagemonth21)
+
+# create a vector of new column names
+new_names <- paste0(names, "_", usagemonth21[1, ])
+
+# rename the columns
+colnames(usagemonth21) <- new_names
+usagemonth21 <- usagemonth21[-(1:2),]
+names(usagemonth21)[1] = "TPID"
+```
+
+Make each month a new row
+```{r}
+library(tidyr)
+usagemonth21 <- pivot_longer(usagemonth21, cols = -TPID, names_to = c(".value", "Variable"), names_sep = "_")
+
+#Delete employee column
+usagemonth21 <- usagemonth21[,-(3)]
+
+# Delete sum count (because incomplete)
+usagemonth21 <- usagemonth21[,-(7)]
+```
+
+Make date in correct format
+```{r}
+usagemonth21$Variable <- gsub(" - ", "_", usagemonth21$Variable)
+```
+
+## 2022
+Clean data
+```{r}
+usagemonth22 <- usagemonth22[,-(86:92)]
+colnames(usagemonth22) <- usagemonth22[2, ]
+names <- colnames(usagemonth22)
+
+# create a vector of new column names
+new_names <- paste0(names, "_", usagemonth22[1, ])
+
+# rename the columns
+colnames(usagemonth22) <- new_names
+usagemonth22 <- usagemonth22[-(1:2),]
+names(usagemonth22)[1] = "TPID"
+```
+
+Make each month a new row
+```{r}
+library(tidyr)
+usagemonth22 <- pivot_longer(usagemonth22, cols = -TPID, names_to = c(".value", "Variable"), names_sep = "_")
+
+#Delete employee column
+usagemonth22 <- usagemonth22[,-(3)]
+
+# Delete sum count (because incomplete)
+usagemonth22 <- usagemonth22[,-(7)]
+```
+
+Make date in correct format
+```{r}
+usagemonth22$Variable <- gsub(" - ", "_", usagemonth22$Variable)
+```
+
+
+## 2023
+Clean data
+```{r}
+usagemonth23 <- usagemonth23[,-(65:71)]
+colnames(usagemonth23) <- usagemonth23[2, ]
+names <- colnames(usagemonth23)
+
+# create a vector of new column names
+new_names <- paste0(names, "_", usagemonth23[1, ])
+
+# rename the columns
+colnames(usagemonth23) <- new_names
+usagemonth23 <- usagemonth23[-(1:2),]
+names(usagemonth23)[1] = "TPID"
+```
+
+Make each month a new row
+```{r}
+library(tidyr)
+usagemonth23 <- pivot_longer(usagemonth23, cols = -TPID, names_to = c(".value", "Variable"), names_sep = "_")
+
+#Delete employee column
+usagemonth23 <- usagemonth23[,-(3)]
+
+# Delete sum count (because incomplete)
+usagemonth23 <- usagemonth23[,-(7)]
+```
+
+Make date in correct format
+```{r}
+usagemonth23$Variable <- gsub(" - ", "_", usagemonth23$Variable)
+```
+
+## Total
+
+Merge all three
+```{r}
+usagemonth <- rbind(usagemonth21, usagemonth22, usagemonth23)
+```
+
+Make all NA as zero and everything as numeric
+```{r}
+usagemonth[, 3:7] <- apply(usagemonth[, 3:7], 2, function(x) ifelse(is.na(x), 0, x))
+usagemonth$`Per User Paid Assigned` <- as.numeric(usagemonth$`Per User Paid Assigned`)
+usagemonth$`Per User Paid Available Seats` <- as.numeric(usagemonth$`Per User Paid Available Seats`)
+usagemonth$`Power Apps App MAU` <- as.numeric(usagemonth$`Power Apps App MAU`)
+usagemonth$`App Count` <- as.numeric(usagemonth$`App Count`)
+usagemonth$`Standalone Power Apps Paid MAU` <- as.numeric(usagemonth$`Standalone Power Apps Paid MAU`)
+```
+
+Delete rows where there are more seats assigned than available
+```{r}
+assignedNOT <- which(usagemonth[,4] > usagemonth[,3])
+
+# Subset the data frame by selecting only the rows where col4 <= col3
+usagemonth <- usagemonth[-assignedNOT, ]
+```
+
+Delete rows where there are more paid active users (MAU) than assigned paid users
+```{r}
+paidNOT <- which(usagemonth[,7] > usagemonth[,4])
+
+# Subset the data frame by selecting only the rows where col7 <= col4
+usagemonth <- usagemonth[-paidNOT, ]
+```
+
+Delete rows where there are more active users (MAU) than employees
+```{r}
+#Get employess
+usagemonth <- merge(usagemonth, employees, by = "TPID")
+
+#Delete rows where MAU is more than employees
+usagemonth <- usagemonth[usagemonth[,5] <= usagemonth[,8],]
+
+# Delete employees again
+usagemonth <- usagemonth[,-(8)]
+```
+
+
+Keep only the customers with 33 datapoint (so all the dates)
+```{r}
+usagemonth <- usagemonth %>%
+filter(Variable %in% c("Jul_2020", "Aug_2020", "Sep_2020", "Oct_2020", "Nov_2020", "Dec_2020", "Jan_2021", "Feb_2021", "Mar_2021", "Apr_2021", "May_2021", "Jun_2021", "Jul_2021", "Aug_2021", "Sep_2021", "Oct_2021", "Nov_2021", "Dec_2021", "Jan_2022", "Feb_2022", "Mar_2022", "Apr_2022", "May_2022", "Jun_2022", "Jul_2022", "Aug_2022", "Sep_2022", "Oct_2022", "Nov_2022", "Dec_2022", "Jan_2023", "Feb_2023", "Mar_2023"))
+
+library(dplyr)
+
+# group by TPID and count the number of rows in each group
+counts <- usagemonth %>%
+  group_by(TPID) %>%
+  summarize(n_rows = n()) %>%
+  ungroup()
+
+# filter to keep only the groups with all dates (33)
+complete <- counts %>%
+  filter(n_rows == 33) %>%
+  pull(TPID)
+
+# filter the original data to keep only the rows with valid customer IDs
+usagemonth <- usagemonth %>%
+  filter(TPID %in% complete)
+```
+
+Make tstop
+```{r}
+month_map_short <- c(Jul_2020 = 1, Aug_2020 = 2, Sep_2020 = 3,
+               Oct_2020 = 4, Nov_2020 = 5, Dec_2020 = 6,
+               Jan_2021 = 7, Feb_2021 = 8, Mar_2021 = 9,
+               Apr_2021 = 10, May_2021 = 11, Jun_2021 = 12,
+               Jul_2021 = 13, Aug_2021 = 14, Sep_2021 = 15,
+               Oct_2021 = 16, Nov_2021 = 17, Dec_2021 = 18,
+               Jan_2022 = 19, Feb_2022 = 20, Mar_2022 = 21,
+               Apr_2022 = 22, May_2022 = 23, Jun_2022 = 24,
+               Jul_2022 = 25, Aug_2022 = 26, Sep_2022 = 27,
+               Oct_2022 = 28, Nov_2022 = 29, Dec_2022 = 30,
+               Jan_2023 = 31, Feb_2023 = 32, Mar_2023 = 33)
+library(dplyr)
+usagemonth$Variable <- recode(usagemonth$Variable, !!!month_map_short)
+names(usagemonth)[2] = "tstop"
+```
+
+
+Merge usage data with dataset
+```{r}
+KPIdatemonth <- merge(KPIdatemonth, usagemonth, by = c("TPID", "tstop"))
+```
+
+
+# Finalize final dataset for monthly data
+Reorder columns
+```{r}
+# create a vector of column names in the desired order
+new_order <- c(names(KPIdatemonth)[1], names(KPIdatemonth)[3:6], names(KPIdatemonth)[8], 
+                names(KPIdatemonth)[7], names(KPIdatemonth)[9], names(KPIdatemonth)[2], 
+                names(KPIdatemonth)[12], names(KPIdatemonth)[11], names(KPIdatemonth)[10], 
+                names(KPIdatemonth)[13], names(KPIdatemonth)[14:27])
+
+# reorder the columns of your data frame using the new_order vector
+KPIdatemonth <- KPIdatemonth[, new_order]
+```
+
+Rename columns
+```{r}
+names(KPIdatemonth)[1] = "ID"
+names(KPIdatemonth)[4] = "country"
+names(KPIdatemonth)[5] = "segment"
+names(KPIdatemonth)[14] = "cross_selling"
+names(KPIdatemonth)[18] = "marketing_engagement_level"
+names(KPIdatemonth)[19] = "registrations_events"
+names(KPIdatemonth)[20] = "digital_content"
+names(KPIdatemonth)[21] = "events"
+names(KPIdatemonth)[22] = "trails"
+names(KPIdatemonth)[23] = "paid_available_seats"
+names(KPIdatemonth)[24] = "paid_assigned_seats"
+names(KPIdatemonth)[25] = "MAU"
+names(KPIdatemonth)[26] = "active_apps"
+names(KPIdatemonth)[27] = "paid_MAU"
+```
+
+Make variables the right category (like numeric)
+```{r}
+library(dplyr)
+KPIdatemonth <- KPIdatemonth %>%
+  mutate_at(vars(6:17), as.numeric)
+
+KPIdatemonth <- KPIdatemonth %>%
+  mutate_at(vars(19:27), as.numeric)
+```
+
+Redo Tstart and Tstop
+```{r}
+KPIdatemonth$tstop <- KPIdatemonth$subscr_time
+KPIdatemonth$tstart <- ifelse(as.numeric(KPIdatemonth$tstop) - 1 < 0, 0, as.numeric(KPIdatemonth$tstop) - 1)
+```
+
+Delete subcr_time because same as tstop
+```{r}
+KPIdatemonth <- KPIdatemonth[,-(13)]
+```
+
+Replace UNKNOWN industry
+```{r}
+# Subset the data frame to get only rows where Industry is "UNKNOWN"
+unknown <- subset(KPIdatemonth, Industry == "UNKNOWN")
+
+# Get the unique Top_parent values from the subsetted data frame
+unique_top_parents <- unique(unknown$Top_Parent)
+
+# Print the unique Top_parent values
+print(unique_top_parents)
+
+# Allocate the right industries
+KPIdatemonth$Industry[KPIdatemonth$Top_Parent == "MÖLNLYCKE HEALTH CARE AB"] <- "Healthcare"
+KPIdatemonth$Industry[KPIdatemonth$Top_Parent == "KIRBY GROUP ENGINEERING LTD"] <- "Industrials & Manufacturing"
+KPIdatemonth$Industry[KPIdatemonth$Top_Parent == "CDB Aviation"] <- "Automotive, Mobility, Transpt"
+KPIdatemonth$Industry[KPIdatemonth$Top_Parent == "swisspor Management AG"] <- "Industrials & Manufacturing"
+```
+
+Make new columns
+
+Make lagged variables
+```{r}
+names(KPIdatemonth)[14] = "Engaged.Contacts"
+names(KPIdatemonth)[16] = "Avg.Interactions.per.Contact"
+KPIdatemonth <- KPIdatemonth %>% group_by(ID) %>% mutate(Engaged.Contacts_lag = dplyr::lag(Engaged.Contacts, n=1, default = NA))
+KPIdatemonth <- KPIdatemonth %>% group_by(ID) %>% mutate(Interactions_lag = dplyr::lag(Interactions, n=1, default = NA))
+KPIdatemonth <- KPIdatemonth %>% group_by(ID) %>% mutate(Avg.Interactions.per.Contact_lag = dplyr::lag(Avg.Interactions.per.Contact, n=1, default = NA))
+KPIdatemonth <- KPIdatemonth %>% group_by(ID) %>% mutate(marketing_engagement_level_lag = dplyr::lag(marketing_engagement_level, n=1, default = NA))
+KPIdatemonth <- KPIdatemonth %>% group_by(ID) %>% mutate(registrations_events_lag = dplyr::lag(registrations_events, n=1, default = NA))
+KPIdatemonth <- KPIdatemonth %>% group_by(ID) %>% mutate(events_lag = dplyr::lag(events, n=1, default = NA))
+KPIdatemonth <- KPIdatemonth %>% group_by(ID) %>% mutate(trails_lag = dplyr::lag(trails, n=1, default = NA))
+KPIdatemonth <- KPIdatemonth %>% group_by(ID) %>% mutate(paid_available_seats_lag = dplyr::lag(paid_available_seats, n=1, default = NA))
+KPIdatemonth <- KPIdatemonth %>% group_by(ID) %>% mutate(paid_assigned_seats_lag = dplyr::lag(paid_assigned_seats, n=1, default = NA))
+KPIdatemonth <- KPIdatemonth %>% group_by(ID) %>% mutate(MAU_lag = dplyr::lag(MAU, n=1, default = NA))
+KPIdatemonth <- KPIdatemonth %>% group_by(ID) %>% mutate(active_apps_lag = dplyr::lag(active_apps, n=1, default = NA))
+KPIdatemonth <- KPIdatemonth %>% group_by(ID) %>% mutate(paid_MAU_lag = dplyr::lag(paid_MAU, n=1, default = NA))
+```
+
+New combinations
+```{r}
+KPIdatemonth$Employees[KPIdatemonth$ID == 11687920] <- 6
+KPIdatemonth$MAU_employees <- KPIdatemonth$MAU/KPIdatemonth$Employees
+KPIdatemonth$paiduse <- KPIdatemonth$paid_MAU/KPIdatemonth$paid_assigned_seats
+KPIdatemonth$paiduse[is.nan(KPIdatemonth$paiduse)] <- 0
+KPIdatemonth$freemium <- ifelse(KPIdatemonth$MAU-KPIdatemonth$paid_MAU < 0, 0, KPIdatemonth$MAU-KPIdatemonth$paid_MAU)
+KPIdatemonth$paidperemploy <- KPIdatemonth$paid_assigned_seats/KPIdatemonth$Employees
+KPIdatemonth$freemiumemploy <- KPIdatemonth$freemium/KPIdatemonth$Employees
+KPIdatemonth <- KPIdatemonth %>% group_by(ID) %>% mutate(freemiumemploy_lag = dplyr::lag(freemiumemploy, n=1, default = NA))
+# Make digital content lag (because I forgot)
+KPIdatemonth <- KPIdatemonth %>% group_by(ID) %>% mutate(digital_content_lag = dplyr::lag(digital_content, n=1, default = NA))
+KPIdatemonth <- KPIdatemonth %>% group_by(ID) %>% mutate(freemium_lag = dplyr::lag(freemium, n=1, default = NA))
+KPIdatemonth <- KPIdatemonth %>% group_by(ID) %>% mutate(revenue_lag = dplyr::lag(revenue, n=1, default = NA))
+KPIdatemonth$apps_MAU <- KPIdatemonth$active_apps/KPIdatemonth$MAU
+KPIdatemonth$apps_MAU[is.nan(KPIdatemonth$apps_MAU) | is.infinite(KPIdatemonth$apps_MAU)] <- 0
+KPIdatemonth <- KPIdatemonth %>% group_by(ID) %>% mutate(apps_MAU_lag = dplyr::lag(apps_MAU, n=1, default = NA))
+```
+
+
+Save the dataset
+```{r}
+write.csv(KPIdatemonth, file = "/Users/Bo/Documents/Universiteit RSM/Master/Thesis/Data/KPIdatemonth.csv", row.names = FALSE)
+```
+
+Make subset with only converted customers
+```{r}
+sum(KPIdatemonth$event>0)
+IDsubsetCoxM <- KPIdatemonth[KPIdatemonth$event == 1, 1]
+write.csv(IDsubsetCoxM, file = "/Users/Bo/Documents/Universiteit RSM/Master/Thesis/Data/IDsubsetCoxM.csv", row.names = FALSE)
+```
+
+
+
+# -----------------------------------------
+# -----------------------------------------
+# Quarterly data
+# -----------------------------------------
+# -----------------------------------------
+
+Merge KPI with start date
+```{r}
+KPIquarter <- KPIquarter[,-(17)]
+KPIdatequarter <- merge(KPIquarter, StartDate, by = c("TPID", "TPID")) 
+KPIdatequarter <- merge(KPIdatequarter, employees, by = c("TPID", "TPID"))
+KPIdatequarter <- KPIdatequarter[c(1:5, 17:18, 6:16)]
+KPIdatequarter[,(7:18)] <- apply(KPIdatequarter[,(7:18)], 2, as.numeric)
+colnames(KPIdatequarter) <- gsub("-", "_", colnames(KPIdatequarter))
+```
+
+Make each month a new row
+```{r}
+library(tidyr)
+KPIdatequarter <- KPIdatequarter %>% 
+  pivot_longer(cols = 8:18, names_to = "column", values_to = "value") 
+```
+
+
+Make Tstart and Tstop
+```{r}
+quarter_map <- c(FY21_Q1 = 1, FY21_Q2 = 2, FY21_Q3 = 3, FY21_Q4 = 4, FY22_Q1 = 5, FY22_Q2 = 6, FY22_Q3 = 7, FY22_Q4 = 8, FY23_Q1 = 9, FY23_Q2 = 10, FY23_Q3 = 11)
+
+library(dplyr)
+KPIdatequarter$column <- recode(KPIdatequarter$column, !!!quarter_map)
+
+names(KPIdatequarter)[8] = "tstop"
+KPIdatequarter$tstart <- as.numeric(KPIdatequarter$tstop) - 1
+KPIdatequarter <- KPIdatequarter[c(1:7, 10, 8:9)]
+```
+
+Start_Date to numbers
+```{r}
+library(lubridate)
+KPIdatequarter$Start_Date <- mdy(KPIdatequarter$Start_Date)
+KPIdatequarter$Start_Date <- format(as.Date(KPIdatequarter$Start_Date, "%mY-%m-%d"), "%B_%Y")
+
+# Delete the ones before July 2020
+KPIdatequarter <- KPIdatequarter %>%
+filter(!Start_Date %in% c("oktober_2019", "november_2019", "december_2019", "januari_2020", "februari_2020", "maart_2020", "april_2020", "mei_2020", "juni_2020", "april_2023"))
+
+# Make it numeric
+quarter_map2 <- c(juli_2020 = 0, augustus_2020 = 0, september_2020 = 0,
+oktober_2020 = 1, november_2020 = 1, december_2020 = 1,
+januari_2021 = 2, februari_2021 = 2, maart_2021 = 2,
+april_2021 = 3, mei_2021 = 3, juni_2021 = 3,
+juli_2021 = 4, augustus_2021 = 4, september_2021 = 4,
+oktober_2021 = 5, november_2021 = 5, december_2021 = 5,
+januari_2022 = 6, februari_2022 = 6, maart_2022 = 6,
+april_2022 = 7, mei_2022 = 7, juni_2022 = 7,
+juli_2022 = 8, augustus_2022 = 8, september_2022 = 8,
+oktober_2022 = 9, november_2022 = 9, december_2022 = 9,
+januari_2023 = 10, februari_2023 = 10, maart_2023 = 10)
+
+library(plyr)
+KPIdatequarter$Start_Date <- mapvalues(KPIdatequarter$Start_Date, from = names(quarter_map2), to = quarter_map2)
+```
+
+Make event variable
+```{r}
+KPIdatequarter$event <- 0
+KPIdatequarter$value <- as.numeric(KPIdatequarter$value)
+KPIdatequarter$value <- ifelse(is.na(KPIdatequarter$value) | KPIdatequarter$value < 0, 0, KPIdatequarter$value)
+
+for (i in 1:nrow(KPIdatequarter)) {
+  current_tpid <- KPIdatequarter$TPID[i]
+  current_value <- KPIdatequarter$value[i]
+  
+  previous_value <- KPIdatequarter$value[1:(i-1)][KPIdatequarter$TPID[1:(i-1)] == current_tpid]
+ 
+  if (current_value >= 10000 & all(previous_value < 10000)) {
+    KPIdatequarter$event[i] <- 1
+  }
+}
+```
+
+Make buy variable
+```{r}
+KPIdatequarter$buy <- 0 
+
+for (i in 1:nrow(KPIdatequarter)) {
+  current_id <- KPIdatequarter$TPID[i]
+  current_event <- KPIdatequarter$event[i]
+
+  if (current_event == 1) {
+    KPIdatequarter$buy[KPIdatequarter$TPID == current_id] <- 1
+  } else if (current_event == 0 & any(KPIdatequarter$buy[KPIdatequarter$TPID == current_id] == 1)) {
+    KPIdatequarter$buy[i] <- 1
+  }
+}
+```
+
+Make subscription time variable
+```{r}
+detach(package:plyr, unload=TRUE)
+library(dplyr)
+
+KPIdatequarter[,(6:12)] <- apply(KPIdatequarter[,(6:12)], 2, as.numeric)
+
+KPIdatequarter <- KPIdatequarter %>%
+  group_by(TPID) %>%
+  mutate(subscr_time = ifelse(Start_Date - tstop < 0, tstop - Start_Date, 0))
+```
+
+
+
+
+#-------------------------
+Cross selling prep
+#-------------------------
+
+Make each month a new row
+```{r}
+colnames(crossquarter) <- gsub("-", "_", colnames(crossquarter))
+
+library(tidyr)
+crossquarter <- crossquarter %>% 
+  pivot_longer(cols = 2:12, names_to = "column", values_to = "value") 
+```
+
+Make tstop
+```{r}
+library(dplyr)
+crossquarter$column <- recode(crossquarter$column, !!!quarter_map)
+names(crossquarter)[2] = "tstop"
+```
+
+
+Merge cross selling with dataset
+```{r}
+KPIdatequarter <- merge(KPIdatequarter, crossquarter, by = c("TPID", "tstop"))
+names(KPIdatequarter)[14] = "cross"
+names(KPIdatequarter)[10] = "revenue"
+```
+
+
+#-------------------------
+Marketing data prep
+#-------------------------
+
+Clean data
+```{r}
+MEIquarter <- MEIquarter[,-(87:94)]
+
+library(zoo)
+MEIquarter[5,] <- t(apply(MEIquarter[5,], 1, function(x) na.locf(x, na.rm = FALSE)))
+colnames(MEIquarter) <- MEIquarter[5, ]
+names <- colnames(MEIquarter)
+
+# create a vector of new column names
+new_names <- paste0(names, "_", MEIquarter[6, ])
+
+# rename the columns
+colnames(MEIquarter) <- new_names
+MEIquarter <- MEIquarter[-(1:6),]
+names(MEIquarter)[1] = "TPID"
+```
+
+Make each month a new row
+```{r}
+library(tidyr)
+MEIquarter <- pivot_longer(MEIquarter, cols = -TPID, names_to = c(".value", "Variable"), names_sep = "_")
+```
+
+Make all NA as zero
+```{r}
+cols_to_replace <- c(3,4,5,7,8,9,10)
+MEIquarter[, cols_to_replace] <- apply(MEIquarter[, cols_to_replace], 2, function(x) ifelse(is.na(x), 0, x))
+```
+
+Make tstop
+```{r}
+MEIquarter$Variable <- gsub("-", "_", MEIquarter$Variable)
+library(dplyr)
+MEIquarter$Variable <- recode(MEIquarter$Variable, !!!quarter_map)
+names(MEIquarter)[2] = "tstop"
+```
+
+Merge marketing data with dataset
+```{r}
+KPIdatequarter <- merge(KPIdatequarter, MEIquarter, by = c("TPID", "tstop"))
+```
+
+
+#-------------------------
+Usage data prep
+#-------------------------
+
+Clean data
+```{r}
+library(zoo)
+usagequarter <- usagequarter[,-(107:113)]
+usagequarter[1,] <- t(apply(usagequarter[1,], 1, function(x) na.locf(x, na.rm = FALSE)))
+colnames(usagequarter) <- usagequarter[2, ]
+names <- colnames(usagequarter)
+
+# create a vector of new column names
+new_names <- paste0(names, "_", usagequarter[1, ])
+
+# rename the columns
+colnames(usagequarter) <- new_names
+usagequarter <- usagequarter[-(1:2),]
+names(usagequarter)[1] = "TPID"
+```
+
+Make each quarter a new row
+```{r}
+library(tidyr)
+usagequarter <- pivot_longer(usagequarter, cols = -TPID, names_to = c(".value", "Variable"), names_sep = "_")
+
+#Delete employee column
+usagequarter <- usagequarter[,-(3)]
+
+# Delete sum count (because incomplete)
+usagequarter <- usagequarter[,-(7)]
+```
+
+Make date in correct format
+```{r}
+usagequarter$Variable <- gsub(" - ", "_", usagequarter$Variable)
+```
+
+
+Make all NA as zero and everything as numeric
+```{r}
+usagequarter[, 3:7] <- apply(usagequarter[, 3:7], 2, function(x) ifelse(is.na(x), 0, x))
+usagequarter$`Per User Paid Assigned` <- as.numeric(usagequarter$`Per User Paid Assigned`)
+usagequarter$`Per User Paid Available Seats` <- as.numeric(usagequarter$`Per User Paid Available Seats`)
+usagequarter$`Power Apps App MAU` <- as.numeric(usagequarter$`Power Apps App MAU`)
+usagequarter$`App Count` <- as.numeric(usagequarter$`App Count`)
+usagequarter$`Standalone Power Apps Paid MAU` <- as.numeric(usagequarter$`Standalone Power Apps Paid MAU`)
+length(unique(usagequarter$TPID)) 
+```
+
+Delete rows where there are more seats assigned than available
+```{r}
+assignedNOT <- which(usagequarter[,4] > usagequarter[,3])
+
+# Subset the data frame by selecting only the rows where col4 <= col3
+usagequarter <- usagequarter[-assignedNOT, ]
+```
+
+Delete rows where there are more paid active users (MAU) than assigned paid users
+```{r}
+paidNOT <- which(usagequarter[,7] > usagequarter[,4])
+
+# Subset the data frame by selecting only the rows where col4 <= col3
+usagequarter <- usagequarter[-paidNOT, ]
+```
+
+
+Delete rows where there are more active users (MAU) than employees
+```{r}
+#Get employees
+usagequarter <- merge(usagequarter, employees, by = "TPID")
+
+# Delete rows where MAU is more than employees
+usagequarter <- usagequarter[usagequarter[,5] <= usagequarter[,8],]
+
+# Delete employees again
+usagequarter <- usagequarter[,-(8)]
+```
+
+
+Keep only the customers with 11 datapoint (so all the dates)
+```{r}
+# Delete the ones before July 2020
+usagequarter <- usagequarter %>%
+filter(Variable %in% c("Q1_FY2021", "Q2_FY2021", "Q3_FY2021", "Q4_FY2021", "Q1_FY2022", "Q2_FY2022", "Q3_FY2022", "Q4_FY2022", "Q1_FY2023", "Q2_FY2023", "Q3_FY2023"))
+
+length(unique(usagequarter$TPID))
+1-(139755/144940)
+library(dplyr)
+
+# group by TPID and count the number of rows in each group
+counts <- usagequarter %>%
+  group_by(TPID) %>%
+  summarize(n_rows = n()) %>%
+  ungroup()
+
+# filter to keep only the groups with all dates (33)
+complete <- counts %>%
+  filter(n_rows == 11) %>%
+  pull(TPID)
+
+# filter the original data to keep only the rows with valid customer IDs
+usagequarter <- usagequarter %>%
+  filter(TPID %in% complete) 
+```
+
+
+Make tstop
+```{r}
+quarter_map_weird <- c(Q1_FY2021 = 1, Q2_FY2021 = 2, Q3_FY2021 = 3, Q4_FY2021 = 4, Q1_FY2022 = 5, Q2_FY2022 = 6, Q3_FY2022 = 7, Q4_FY2022 = 8, Q1_FY2023 = 9, Q2_FY2023 = 10, Q3_FY2023 = 11)
+
+library(dplyr)
+usagequarter$Variable <- recode(usagequarter$Variable, !!!quarter_map_weird)
+names(usagequarter)[2] = "tstop"
+```
+
+Merge usage data with dataset
+```{r}
+KPIdatequarter <- merge(KPIdatequarter, usagequarter, by = c("TPID", "tstop")) 
+```
+
+
+# Finalize final dataset for quartly data
+Reorder columns
+```{r}
+# create a vector of column names in the desired order
+new_order <- c(names(KPIdatequarter)[1], names(KPIdatequarter)[3:6], names(KPIdatequarter)[8], 
+                names(KPIdatequarter)[7], names(KPIdatequarter)[9], names(KPIdatequarter)[2], 
+                names(KPIdatequarter)[12], names(KPIdatequarter)[11], names(KPIdatequarter)[10], 
+                names(KPIdatequarter)[13:27])
+
+# reorder the columns of your data frame using the new_order vector
+KPIdatequarter <- KPIdatequarter[, new_order]
+```
+
+Rename columns
+```{r}
+names(KPIdatequarter)[1] = "ID"
+names(KPIdatequarter)[2] = "Top_Parent"
+names(KPIdatequarter)[4] = "country"
+names(KPIdatequarter)[5] = "segment"
+names(KPIdatequarter)[14] = "cross_selling"
+names(KPIdatequarter)[18] = "marketing_engagement_level"
+names(KPIdatequarter)[19] = "registrations_events"
+names(KPIdatequarter)[20] = "digital_content"
+names(KPIdatequarter)[21] = "events"
+names(KPIdatequarter)[22] = "trails"
+names(KPIdatequarter)[23] = "paid_available_seats"
+names(KPIdatequarter)[24] = "paid_assigned_seats"
+names(KPIdatequarter)[25] = "MAU"
+names(KPIdatequarter)[26] = "active_apps"
+names(KPIdatequarter)[27] = "paid_MAU"
+```
+
+Make variables the right category (like numeric)
+```{r}
+library(dplyr)
+KPIdatequarter <- KPIdatequarter %>%
+  mutate_at(vars(6:17), as.numeric)
+
+KPIdatequarter <- KPIdatequarter %>%
+  mutate_at(vars(19:27), as.numeric)
+```
+
+Redo Tstart and Tstop
+```{r}
+KPIdatequarter$tstop <- KPIdatequarter$subscr_time
+KPIdatequarter$tstart <- ifelse(as.numeric(KPIdatequarter$tstop) - 1 < 0, 0, as.numeric(KPIdatequarter$tstop) - 1)
+```
+
+Delete subscr_time because it is the same as tstop
+```{r}
+KPIdatequarter <- KPIdatequarter[,-(13)]
+```
+
+
+Replace UNKNOWN industry
+```{r}
+# Subset the data frame to get only rows where Industry is "UNKNOWN"
+unknown <- subset(KPIdatequarter, Industry == "UNKNOWN")
+
+# Get the unique Top_parent values from the subsetted data frame
+unique_top_parents <- unique(unknown$Top_Parent)
+
+# Print the unique Top_parent values
+print(unique_top_parents)
+
+# Allocate right industries
+KPIdatequarter$Industry[KPIdatequarter$Top_Parent == "MÖLNLYCKE HEALTH CARE AB"] <- "Healthcare"
+KPIdatequarter$Industry[KPIdatequarter$Top_Parent == "KIRBY GROUP ENGINEERING LTD"] <- "Industrials & Manufacturing"
+KPIdatequarter$Industry[KPIdatequarter$Top_Parent == "CDB Aviation"] <- "Automotive, Mobility, Transpt"
+KPIdatequarter$Industry[KPIdatequarter$Top_Parent == "swisspor Management AG"] <- "Industrials & Manufacturing"
+```
+
+Make new columns
+
+Make lagged variables
+```{r}
+names(KPIdatequarter)[14] = "Engaged.Contacts"
+names(KPIdatequarter)[16] = "Avg.Interactions.per.Contact"
+KPIdatequarter <- KPIdatequarter %>% group_by(ID) %>% mutate(Engaged.Contacts_lag = dplyr::lag(Engaged.Contacts, n=1, default = NA))
+KPIdatequarter <- KPIdatequarter %>% group_by(ID) %>% mutate(Interactions_lag = dplyr::lag(Interactions, n=1, default = NA))
+KPIdatequarter <- KPIdatequarter %>% group_by(ID) %>% mutate(Avg.Interactions.per.Contact_lag = dplyr::lag(Avg.Interactions.per.Contact, n=1, default = NA))
+KPIdatequarter <- KPIdatequarter %>% group_by(ID) %>% mutate(marketing_engagement_level_lag = dplyr::lag(marketing_engagement_level, n=1, default = NA))
+KPIdatequarter <- KPIdatequarter %>% group_by(ID) %>% mutate(registrations_events_lag = dplyr::lag(registrations_events, n=1, default = NA))
+KPIdatequarter <- KPIdatequarter %>% group_by(ID) %>% mutate(events_lag = dplyr::lag(events, n=1, default = NA))
+KPIdatequarter <- KPIdatequarter %>% group_by(ID) %>% mutate(trails_lag = dplyr::lag(trails, n=1, default = NA))
+KPIdatequarter <- KPIdatequarter %>% group_by(ID) %>% mutate(paid_available_seats_lag = dplyr::lag(paid_available_seats, n=1, default = NA))
+KPIdatequarter <- KPIdatequarter %>% group_by(ID) %>% mutate(paid_assigned_seats_lag = dplyr::lag(paid_assigned_seats, n=1, default = NA))
+KPIdatequarter <- KPIdatequarter %>% group_by(ID) %>% mutate(MAU_lag = dplyr::lag(MAU, n=1, default = NA))
+KPIdatequarter <- KPIdatequarter %>% group_by(ID) %>% mutate(active_apps_lag = dplyr::lag(active_apps, n=1, default = NA))
+KPIdatequarter <- KPIdatequarter %>% group_by(ID) %>% mutate(paid_MAU_lag = dplyr::lag(paid_MAU, n=1, default = NA))
+```
+
+New combinations
+```{r}
+KPIdatequarter$Employees[KPIdatequarter$ID == 11687920] <- 6
+KPIdatequarter$MAU_employees <- KPIdatequarter$MAU/KPIdatequarter$Employees
+KPIdatequarter$paiduse <- KPIdatequarter$paid_MAU/KPIdatequarter$paid_assigned_seats
+KPIdatequarter$paiduse[is.nan(KPIdatequarter$paiduse)] <- 0
+KPIdatequarter$freemium <- ifelse(KPIdatequarter$MAU-KPIdatequarter$paid_MAU < 0, 0, KPIdatequarter$MAU-KPIdatequarter$paid_MAU)
+KPIdatequarter$paidperemploy <- KPIdatequarter$paid_assigned_seats/KPIdatequarter$Employees
+KPIdatequarter$freemiumemploy <- KPIdatequarter$freemium/KPIdatequarter$Employees
+KPIdatequarter <- KPIdatequarter %>% group_by(ID) %>% mutate(freemiumemploy_lag = dplyr::lag(freemiumemploy, n=1, default = NA))
+# Make digital content lag (because I forgot)
+KPIdatequarter <- KPIdatequarter %>% group_by(ID) %>% mutate(digital_content_lag = dplyr::lag(digital_content, n=1, default = NA))
+KPIdatequarter <- KPIdatequarter %>% group_by(ID) %>% mutate(freemium_lag = dplyr::lag(freemium, n=1, default = NA))
+KPIdatequarter$apps_MAU <- KPIdatequarter$active_apps/KPIdatequarter$MAU
+KPIdatequarter$apps_MAU[is.nan(KPIdatequarter$apps_MAU) | is.infinite(KPIdatequarter$apps_MAU)] <- 0
+KPIdatequarter <- KPIdatequarter %>% group_by(ID) %>% mutate(apps_MAU_lag = dplyr::lag(apps_MAU, n=1, default = NA))
+```
+
+
+Save the dataset
+```{r}
+write.csv(KPIdatequarter, file = "/Users/Bo/Documents/Universiteit RSM/Master/Thesis/Data/KPIdatequarter.csv", row.names = FALSE)
+```
+
+Make subset with only converted customers
+```{r}
+sum(KPIdatequarter$event>0)
+IDsubsetCoxQ <- KPIdatequarter[KPIdatequarter$event == 1, 1]
+write.csv(IDsubsetCoxQ, file = "/Users/Bo/Documents/Universiteit RSM/Master/Thesis/Data/IDsubsetCoxQ.csv", row.names = FALSE)
+```
+
+
+
+# -----------------------------------------
+# -----------------------------------------
+# Yearly data
+# -----------------------------------------
+# -----------------------------------------
+
+Merge KPI with start date
+```{r}
+KPIyear <- KPIyear[,-(9)]
+KPIdateyear <- merge(KPIyear, StartDate, by = c("TPID", "TPID"))
+KPIdateyear <- merge(KPIdateyear, employees, by = c("TPID", "TPID")) 
+KPIdateyear <- KPIdateyear[c(1:5, 9:10, 6:8)]
+KPIdateyear[,(8:10)] <- apply(KPIdateyear[,(8:10)], 2, as.numeric)
+```
+
+Start_Date to numbers
+```{r}
+library(lubridate)
+KPIdateyear$Start_Date <- mdy(KPIdateyear$Start_Date)
+KPIdateyear$Start_Date <- format(as.Date(KPIdateyear$Start_Date, "%mY-%m-%d"), "%B_%Y")
+
+# Delete the ones before July 2020
+KPIdateyear <- KPIdateyear %>%
+filter(!Start_Date %in% c("oktober_2019", "november_2019", "december_2019", "januari_2020", "februari_2020", "maart_2020", "april_2020", "mei_2020", "juni_2020", "april_2023")) 
+
+# Make it numeric
+year_map2 <- c(juli_2020 = 21, augustus_2020 = 21, september_2020 = 21,
+oktober_2020 = 21, november_2020 = 21, december_2020 = 21,
+januari_2021 = 21, februari_2021 = 21, maart_2021 = 21,
+april_2021 = 21, mei_2021 = 21, juni_2021 = 21,
+juli_2021 = 22, augustus_2021 = 22, september_2021 = 22,
+oktober_2021 = 22, november_2021 = 22, december_2021 = 22,
+januari_2022 = 22, februari_2022 = 22, maart_2022 = 22,
+april_2022 = 22, mei_2022 = 22, juni_2022 = 22,
+juli_2022 = 23, augustus_2022 = 23, september_2022 = 23,
+oktober_2022 = 23, november_2022 = 23, december_2022 = 23,
+januari_2023 = 23, februari_2023 = 23, maart_2023 = 23)
+
+library(plyr)
+KPIdateyear$Start_Date <- mapvalues(KPIdateyear$Start_Date, from = names(year_map2), to = year_map2)
+
+```
+
+Delete year 2023
+```{r}
+KPIdateyear <- KPIdateyear[,-(10)]
+```
+
+Make NA as zero for revenue
+```{r}
+KPIdateyear$FY21 <- ifelse(is.na(KPIdateyear$FY21), 0, KPIdateyear$FY21)
+KPIdateyear$FY22 <- ifelse(is.na(KPIdateyear$FY22), 0, KPIdateyear$FY22)
+```
+
+#-------------------------
+Cross selling prep
+#-------------------------
+
+Make normal and lagged variable
+```{r}
+crossyear <- crossyear[,-(4)]
+names(crossyear)[2] = "cross_selling_lag"
+names(crossyear)[3] = "cross_selling"
+```
+
+Merge cross selling with dataset
+```{r}
+KPIdateyear <- merge(KPIdateyear, crossyear, by = "TPID") 
+```
+
+
+#-------------------------
+Marketing data prep
+#-------------------------
+
+Clean data
+```{r}
+MEIyear <- MEIyear[,-(26:33)]
+
+library(zoo)
+MEIyear[5,] <- t(apply(MEIyear[5,], 1, function(x) na.locf(x, na.rm = FALSE)))
+colnames(MEIyear) <- MEIyear[5, ]
+names <- colnames(MEIyear)
+
+# create a vector of new column names
+new_names <- paste0(names, "_", MEIyear[6, ])
+
+# rename the columns
+colnames(MEIyear) <- new_names
+MEIyear <- MEIyear[-(1:6),]
+names(MEIyear)[1] = "TPID"
+```
+
+Delete FY23
+```{r}
+cols_to_remove <- grep("_FY23", names(MEIyear))
+MEIyear <- MEIyear[, -cols_to_remove]
+```
+
+Rename columns
+```{r}
+colnames(MEIyear) <- gsub("FY21", "lag", colnames(MEIyear))
+colnames(MEIyear) <- gsub("_FY22", "", colnames(MEIyear))
+colnames(MEIyear) <- gsub(" ", "_", colnames(MEIyear))
+```
+
+Make all NA as zero
+```{r}
+cols_to_replace <- c(2:17)
+MEIyear[, cols_to_replace] <- apply(MEIyear[, cols_to_replace], 2, function(x) ifelse(is.na(x), 0, x))
+```
+
+Merge marketing data with dataset
+```{r}
+KPIdateyear <- merge(KPIdateyear, MEIyear, by = "TPID") # from 1919 to 1212
+```
+
+
+#-------------------------
+Usage data prep
+#-------------------------
+
+Clean data
+```{r}
+usageyear <- usageyear[,-(23:29)]
+usageyear[1,] <- t(apply(usageyear[1,], 1, function(x) na.locf(x, na.rm = FALSE)))
+colnames(usageyear) <- usageyear[2, ]
+names <- colnames(usageyear)
+
+# create a vector of new column names
+new_names <- paste0(names, "_", usageyear[1, ])
+
+# rename the columns
+colnames(usageyear) <- new_names
+usageyear <- usageyear[-(1:2),]
+names(usageyear)[1] = "TPID"
+```
+
+Delete FY23 and employees 1
+```{r}
+usageyear <- usageyear[,-(16:22)]
+usageyear <- usageyear[,-(2)]
+```
+
+Rename columns
+```{r}
+colnames(usageyear) <- gsub("FY2021", "lag", colnames(usageyear))
+colnames(usageyear) <- gsub("_FY2022", "", colnames(usageyear))
+colnames(usageyear) <- gsub(" ", "_", colnames(usageyear))
+```
+
+
+
+Make all NA as zero and everything as numeric
+```{r}
+usageyear[, 2:14] <- apply(usageyear[, 2:14], 2, function(x) ifelse(is.na(x), 0, x))
+usageyear$Per_User_Paid_Available_Seats_lag <- as.numeric(usageyear$Per_User_Paid_Available_Seats_lag)
+usageyear$Per_User_Paid_Available_Seats <- as.numeric(usageyear$Per_User_Paid_Available_Seats)
+usageyear$Per_User_Paid_Assigned <- as.numeric(usageyear$Per_User_Paid_Assigned)
+usageyear$Per_User_Paid_Assigned_lag <- as.numeric(usageyear$Per_User_Paid_Assigned_lag)
+usageyear$Power_Apps_App_MAU_lag <- as.numeric(usageyear$Power_Apps_App_MAU_lag)
+usageyear$Power_Apps_App_MAU <- as.numeric(usageyear$Power_Apps_App_MAU)
+usageyear$App_Count_lag <- as.numeric(usageyear$App_Count_lag)
+usageyear$App_Count <- as.numeric(usageyear$App_Count)
+usageyear$Sum_of_nSessionsPerTenant_lag <- as.numeric(usageyear$Sum_of_nSessionsPerTenant_lag)
+usageyear$Sum_of_nSessionsPerTenant <- as.numeric(usageyear$Sum_of_nSessionsPerTenant)
+usageyear$Standalone_Power_Apps_Paid_MAU_lag <- as.numeric(usageyear$Standalone_Power_Apps_Paid_MAU_lag)
+usageyear$Standalone_Power_Apps_Paid_MAU <- as.numeric(usageyear$Standalone_Power_Apps_Paid_MAU)
+usageyear$Office_365_Total_Assigned_Seats <- as.numeric(usageyear$Office_365_Total_Assigned_Seats)
+
+```
+
+Delete column sum count
+```{r}
+usageyear <- usageyear[,-(6)]
+usageyear <- usageyear[,-(12)]
+```
+
+
+Delete rows where there are more seats assigned than available
+```{r}
+assignedNOT <- which(usageyear[,10] > usageyear[,9] | usageyear[,3] > usageyear[,2])
+
+# Subset the data frame by selecting only the rows where col4 <= col3
+usageyear <- usageyear[-assignedNOT, ]
+```
+
+Delete rows where there are more paid active users (MAU) than assigned paid users
+```{r}
+paidNOT <- which(usageyear[,6] > usageyear[,3] | usageyear[,12] > usageyear[,9] )
+
+# Subset the data frame by selecting only the rows where col4 <= col3
+usageyear <- usageyear[-paidNOT, ]
+```
+
+
+Delete rows where there are more active users (MAU) than employees
+```{r}
+# Delete rows where MAU is more than employees
+usageyear <- usageyear[usageyear[,4] <= usageyear[,7],]
+usageyear <- usageyear[usageyear[,10] <= usageyear[,7],]
+
+# Delete employees again
+usageyear <- usageyear[,-(7)]
+```
+
+Merge usage data with dataset
+```{r}
+KPIdateyear <- merge(KPIdateyear, usageyear, by = "TPID") # from 1212 to 965
+```
+
+
+# Finalize final dataset for yearly data
+
+Rename columns
+```{r}
+names(KPIdateyear)[1] = "ID"
+names(KPIdateyear)[2] = "Top_Parent"
+names(KPIdateyear)[4] = "country"
+names(KPIdateyear)[5] = "segment"
+names(KPIdateyear)[6] = "start_year"
+names(KPIdateyear)[18] = "marketing_engagement_level_lag"
+names(KPIdateyear)[19] = "marketing_engagement_level"
+names(KPIdateyear)[20] = "registrations_events_lag"
+names(KPIdateyear)[21] = "registrations_events"
+names(KPIdateyear)[22] = "digital_content_lag"
+names(KPIdateyear)[23] = "digital_content"
+names(KPIdateyear)[24] = "events_lag"
+names(KPIdateyear)[25] = "events"
+names(KPIdateyear)[26] = "trails_lag"
+names(KPIdateyear)[27] = "trails"
+names(KPIdateyear)[28] = "paid_available_seats_lag"
+names(KPIdateyear)[29] = "paid_assigned_seats_lag"
+names(KPIdateyear)[30] = "MAU_lag"
+names(KPIdateyear)[31] = "active_apps_lag"
+names(KPIdateyear)[32] = "paid_MAU_lag"
+names(KPIdateyear)[33] = "paid_available_seats"
+names(KPIdateyear)[34] = "paid_assigned_seats"
+names(KPIdateyear)[35] = "MAU"
+names(KPIdateyear)[36] = "active_apps"
+names(KPIdateyear)[37] = "paid_MAU"
+```
+
+Make variables the right category (like numeric)
+```{r}
+library(dplyr)
+KPIdateyear <- KPIdateyear %>%
+  mutate_at(vars(6:17), as.numeric)
+
+KPIdateyear <- KPIdateyear %>%
+  mutate_at(vars(20:37), as.numeric)
+```
+
+
+Replace UNKNOWN industry
+```{r}
+# Subset the data frame to get only rows where Industry is "UNKNOWN"
+unknown <- subset(KPIdateyear, Industry == "UNKNOWN")
+
+# Get the unique Top_parent values from the subsetted data frame
+unique_top_parents <- unique(unknown$Top_Parent)
+
+# Print the unique Top_parent values
+print(unique_top_parents)
+
+# Allocate right industries
+KPIdateyear$Industry[KPIdateyear$Top_Parent == "MÖLNLYCKE HEALTH CARE AB"] <- "Healthcare"
+KPIdateyear$Industry[KPIdateyear$Top_Parent == "KIRBY GROUP ENGINEERING LTD"] <- "Industrials & Manufacturing"
+KPIdateyear$Industry[KPIdateyear$Top_Parent == "CDB Aviation"] <- "Automotive, Mobility, Transpt"
+KPIdateyear$Industry[KPIdateyear$Top_Parent == "swisspor Management AG"] <- "Industrials & Manufacturing"
+```
+
+Make new columns
+
+New combinations
+```{r}
+KPIdateyear <- KPIdateyear[KPIdateyear[,35] <= KPIdateyear[,7],]
+
+KPIdateyear$Employees[KPIdateyear$ID == 11687920] <- 6
+KPIdateyear$MAU_employees <- KPIdateyear$MAU/KPIdateyear$Employees
+KPIdateyear$paiduse <- KPIdateyear$paid_MAU/KPIdateyear$paid_assigned_seats
+KPIdateyear$paiduse[is.nan(KPIdateyear$paiduse)] <- 0
+KPIdateyear$freemium <- ifelse(KPIdateyear$MAU-KPIdateyear$paid_MAU < 0, 0, KPIdateyear$MAU-KPIdateyear$paid_MAU)
+KPIdateyear$paidperemploy <- KPIdateyear$paid_assigned_seats/KPIdateyear$Employees
+KPIdateyear$freemiumemploy <- KPIdateyear$freemium/KPIdateyear$Employees
+KPIdateyear <- KPIdateyear %>% group_by(ID) %>% mutate(freemiumemploy_lag = dplyr::lag(freemiumemploy, n=1, default = NA))
+# Make digital content lag (because I forgot)
+KPIdateyear <- KPIdateyear %>% group_by(ID) %>% mutate(digital_content_lag = dplyr::lag(digital_content, n=1, default = NA))
+KPIdateyear <- KPIdateyear %>% group_by(ID) %>% mutate(freemium_lag = dplyr::lag(freemium, n=1, default = NA))
+
+```
+
+
+Save the dataset
+```{r}
+write.csv(KPIdateyear, file = "/Users/Bo/Documents/Universiteit RSM/Master/Thesis/Data/KPIdateyear.csv", row.names = FALSE)
+```
+
+Make subset with only converted customers
+```{r}
+subsetY <- KPIdateyear[KPIdateyear$start_year==22, 1:41]
+
+# Filter dataset year based on IDs present in dataset month
+subsetYM <- subsetY[subsetY$ID %in% IDsubsetCoxM$ID, ]
+subsetYQ <- subsetY[subsetY$ID %in% IDsubsetCoxQ$ID, ]
+
+write.csv(subsetYM, file = "/Users/Bo/Documents/Universiteit RSM/Master/Thesis/Data/subsetYM.csv", row.names = FALSE)
+write.csv(subsetYQ, file = "/Users/Bo/Documents/Universiteit RSM/Master/Thesis/Data/subsetYQ.csv", row.names = FALSE)
+```
+

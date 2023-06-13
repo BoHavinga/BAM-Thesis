@@ -1,0 +1,134 @@
+---
+title: "Prep data for cox"
+author: "Bo Havinga"
+date: "4/29/2023"
+output: html_document
+---
+
+DATA section
+
+Dependent variable
+```{r}
+# How many buy now?
+library(ggplot2)
+
+# Number of unique IDs with buy==1
+buy_1_count <- BUYquarter %>% 
+  filter(buy == 1) %>% 
+  distinct(ID) %>% 
+  n_distinct()
+
+# Number of unique IDs with buy==0
+buy_0_count <- BUYquarter %>% 
+  filter(buy == 0) %>% 
+  distinct(ID) %>% 
+  n_distinct()
+
+# Create a data frame for plotting
+plot_data <- data.frame(Buy = c("Converted", "Not Converted"), Count = c(buy_1_count, buy_0_count))
+
+ggplot(plot_data, aes(x = Buy, y = Count, fill = Buy)) + 
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = Count), vjust = -0.2, size=10) +
+  scale_fill_manual(values = c("light blue", "dark blue"), guide = "none") +  
+  labs(y = "", x = "") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(color = "black"), axis.text=element_text(size=16) )
+
+
+# Avg time before a deal
+mean(BUYquarterID$tstop)
+```
+
+
+Firmographic
+```{r}
+firmographic <- subset(BUYquarter, tstart == 0)
+
+library(xtable)
+print(xtable(table(firmographic[,3]), caption = "Industry"), include.rownames = TRUE)
+print(xtable(table(firmographic[,4]), caption = "Country"), include.rownames = TRUE)
+print(xtable(table(firmographic[,5]), caption = "Segment"), include.rownames = TRUE)
+```
+
+Numeric
+```{r}
+library(dplyr)
+library(xtable)
+
+# select columns of interest
+kpis <- BUYquarter[, c(7:9,11,10,6,13,16,20,19,21,41,26,24,25,47)]
+
+# calculate summary statistics
+kpis_summary <- kpis %>% 
+  summarize(
+    min = apply(kpis, 2, min),
+    max = apply(kpis, 2, max),
+    mean = apply(kpis, 2, mean),
+    median = apply(kpis, 2, median),
+    sd = apply(kpis, 2, sd)
+  )
+
+# rename rows with variable names
+rownames(kpis_summary) <- names(kpis)
+
+# create table with xtable
+kpis_table <- xtable(kpis_summary[,c("min", "max", "mean", "median", "sd")])
+
+# add table caption and label
+attr(kpis_table, "caption") <- "Summary statistics of numeric variables"
+attr(kpis_table, "label") <- "tab:kpis_summary"
+
+# print table in LaTeX format
+print(kpis_table, caption.placement="top")
+```
+
+Dependent Poisson
+```{r}
+library(ggplot2)
+ggplot(BUYquarterID_out, aes(x = new_rev)) +
+  geom_bar()
+```
+
+
+Independent Poisson for in apendix
+Firmographic
+```{r}
+library(xtable)
+print(xtable(table(BUYquarterID_out[,3]), caption = "Industry"), include.rownames = TRUE)
+print(xtable(table(BUYquarterID_out[,4]), caption = "Country"), include.rownames = TRUE)
+print(xtable(table(BUYquarterID_out[,5]), caption = "Segment"), include.rownames = TRUE)
+```
+
+Numeric
+```{r}
+library(dplyr)
+library(xtable)
+
+# select columns of interest
+kpis <- BUYquarterID_out[, c(7:9,11,10,6,13,16,20,19,21,41,26,24,47)]
+
+# calculate summary statistics
+kpis_summary <- kpis %>% 
+  summarize(
+    min = apply(kpis, 2, min),
+    max = apply(kpis, 2, max),
+    mean = apply(kpis, 2, mean),
+    median = apply(kpis, 2, median),
+    sd = apply(kpis, 2, sd)
+  )
+
+# rename rows with variable names
+rownames(kpis_summary) <- names(kpis)
+
+# create table with xtable
+kpis_table <- xtable(kpis_summary[,c("min", "max", "mean", "median", "sd")])
+
+# add table caption and label
+attr(kpis_table, "caption") <- "Summary statistics of numeric variables"
+attr(kpis_table, "label") <- "tab:kpis_summary"
+
+# print table in LaTeX format
+print(kpis_table, caption.placement="top")
+```
+
