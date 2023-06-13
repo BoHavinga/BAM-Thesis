@@ -1,7 +1,6 @@
 ---
-title: "New Cox"
+title: "Cox regression for quarterly data"
 author: "Bo Havinga"
-date: "5/20/2023"
 output: html_document
 ---
 
