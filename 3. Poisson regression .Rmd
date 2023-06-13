@@ -1,7 +1,6 @@
 ---
 title: "Poisson regression Thesis"
 author: "Bo Havinga"
-date: "5/8/2023"
 output: html_document
 ---
 
