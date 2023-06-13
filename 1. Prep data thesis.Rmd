@@ -1,7 +1,6 @@
 ---
 title: "Prep data Thesis"
 author: "Bo Havinga"
-date: "4/26/2023"
 output: html_document
 ---
 
