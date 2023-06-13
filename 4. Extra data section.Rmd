@@ -1,7 +1,6 @@
 ---
-title: "Prep data for cox"
+title: "Extra data analysis"
 author: "Bo Havinga"
-date: "4/29/2023"
 output: html_document
 ---
 
